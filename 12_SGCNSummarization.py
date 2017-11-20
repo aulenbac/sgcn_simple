@@ -6,13 +6,13 @@ from datetime import datetime
 import requests,csv,io
 
 taxGroupMappings = {}
-for record in list(csv.DictReader(io.StringIO(requests.get("https://www.sciencebase.gov/catalog/file/get/56d720ece4b015c306f442d5?f=__disk__fd%2Feb%2F41%2Ffdeb4194e44ce4754adafecd795faca93d40d5c8").text))):
+for record in list(csv.DictReader(open("sgcnTaxonomicGroupMappings.csv"))):
     taxGroupMappings[record["ProvidedName"]] = record["PreferredName"]
 
 AuthorityFile_2005 = "https://www.sciencebase.gov/catalog/file/get/56d720ece4b015c306f442d5?f=__disk__38%2F22%2F26%2F38222632f48bf0c893ad1017f6ba557d0f672432"
 AuthorityURL_2005 = "https://www.sciencebase.gov/catalog/item/56d720ece4b015c306f442d5"
 speciesList_2005 = []
-for record in list(csv.DictReader(io.StringIO(requests.get(AuthorityFile_2005).text), delimiter="\t")):
+for record in list(csv.DictReader(open("2005SWAPSpeciesList.tsv"), delimiter="\t")):
     if record["scientificname"] not in speciesList_2005:
         speciesList_2005.append(record["scientificname"])
 
@@ -97,8 +97,8 @@ while sgcnSummary is not None:
                 
         sgcn["State List 2005"] = sorted(sgcn["State List 2005"])
         sgcn["State List 2015"] = sorted(sgcn["State List 2015"])
-        sgcn["Scientific Name List 2005"] = sorted(sgcn["Scientific Name List 2015"])
-        sgcn["Common Name List 2005"] = sorted(sgcn["Common Name List 2015"])
+        sgcn["Scientific Name List 2005"] = sorted(sgcn["Scientific Name List 2005"])
+        sgcn["Common Name List 2005"] = sorted(sgcn["Common Name List 2005"])
         sgcn["Scientific Name List 2015"] = sorted(sgcn["Scientific Name List 2015"])
         sgcn["Common Name List 2015"] = sorted(sgcn["Common Name List 2015"])
 
@@ -118,6 +118,28 @@ while sgcnSummary is not None:
                     break
             if sgcn["Taxonomic Group"] is None:
                 sgcn["Taxonomic Group"] = "Other"
+
+        if "listingStatus" in sgcnSummary["tess"]["tessData"].keys():
+            if len(sgcnSummary["tess"]["tessData"]["listingStatus"]) == 1:
+                sgcn["Listing Status"] = sgcnSummary["tess"]["tessData"]["listingStatus"][0]["STATUS"]
+                if "LISTING_DATE" in sgcnSummary["tess"]["tessData"]["listingStatus"][0].keys():
+                    sgcn["Listing Date"] = sgcnSummary["tess"]["tessData"]["listingStatus"][0]["LISTING_DATE"]
+                else:
+                    sgcn["Listing Date"] = "Not Available"
+            else:
+                whereverFoundStatus = next((s for s in sgcnSummary["tess"]["tessData"]["listingStatus"] if s["POP_DESC"] == "Wherever found"), None)
+                if whereverFoundStatus is not None and "LISTING_DATE" in whereverFoundStatus.keys():
+                    sgcn["Listing Status"] = whereverFoundStatus["STATUS"]
+                    if "LISTING_DATE" in sgcnSummary["tess"]["tessData"]["listingStatus"][0].keys():
+                        sgcn["Listing Date"] = whereverFoundStatus["LISTING_DATE"]
+                    else:
+                        sgcn["Listing Date"] = "Not Available"
+                else:
+                    sgcn["Listing Status"] = "Multiple Listing Status Designations (refer to TESS data)"
+                    sgcn["Listing Date"] = "Multiple Listing Status Designations (refer to TESS data)"
+        else:
+            sgcn["Listing Status"] = "Not Listed"
+            sgcn["Listing Date"] = "Not Listed"
 
         uniqueNamesCollection.update_one({"_id":sgcnSummary["_id"]},{"$set":{"SGCN Summary":sgcn}})
         count = count + 1
