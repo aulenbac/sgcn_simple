@@ -7,12 +7,12 @@ from bis2 import dd
 from IPython.display import display
 
 bisDB = dd.getDB("bis")
-uniqueNamesCollection = bisDB["UniqueNames"]
+sgcnTIRProcessCollection = bisDB["SGCN TIR Process"]
 
 count = 0
 tessRegistration = 1
 while tessRegistration is not None:
-    tessRegistration = uniqueNamesCollection.find_one({"tess.processingMetadata":{"$exists":False}},{"_id":1,"tess.registration":1})
+    tessRegistration = sgcnTIRProcessCollection.find_one({"tess.processingMetadata":{"$exists":False}},{"_id":1,"tess.registration":1})
     
     if tessRegistration is not None:
         processingMetadata = {}
@@ -33,6 +33,9 @@ while tessRegistration is not None:
             if tessData["result"]:
                 processingMetadata["matchMethod"] = "SCINAME Match"
 
-        uniqueNamesCollection.update_one({"_id":tessRegistration["_id"]},{"$set":{"tess.processingMetadata":processingMetadata,"tess.tessData":tessData}})
+        if tessData["result"]:
+            sgcnTIRProcessCollection.update_one({"_id":tessRegistration["_id"]},{"$set":{"tess.processingMetadata":processingMetadata,"tess.tessData":tessData}})
+        else:
+            sgcnTIRProcessCollection.update_one({"_id":tessRegistration["_id"]},{"$set":{"tess.processingMetadata":processingMetadata}})
         count = count + 1
         print (count)

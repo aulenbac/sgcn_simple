@@ -1,27 +1,41 @@
-
 # coding: utf-8
 
-from bis import bis
-from bis2 import dd
+from IPython.display import display
 from datetime import datetime
+from bis2 import dd
+from bis import bis
+from bis import itis
+from bis import worms
 
 bisDB = dd.getDB("bis")
-sgcnSpeciesCollection = bisDB["SGCN"]
-sgcnUniqueNamesCollection = bisDB["UniqueNames"]
+sgcnSourceCollection = bisDB["SGCN Source Data"]
+sgcnTIRProcessCollection = bisDB["SGCN TIR Process"]
 
-# Loop through all unique species from the SGCN source
-for sgcnDistinctSpecies in sgcnSpeciesCollection.find({},{"Scientific Name":1}).distinct("Scientific Name"):
-    # Set up the record to include process metadata referring to the algorithm used to produce a clean name
-    thisRecord = {}
-    thisRecord["processMetadata"] = {}
-    thisRecord["processMetadata"]["originalSourceCollection"] = "SGCN"
-    thisRecord["processMetadata"]["dateProcessed"] = datetime.utcnow().isoformat()
-    thisRecord["processMetadata"]["processingAlgorithmName"] = "bis.cleanScientificName"
-    thisRecord["processMetadata"]["processingAlgorithmURI"] = "https://github.com/usgs-bcb/bis/blob/master/bis/bis.py"
-    thisRecord["ScientificName_original"] = sgcnDistinctSpecies
-    thisRecord["ScientificName_unique"] = bis.cleanScientificName(sgcnDistinctSpecies)
+pipeline = [
+    {"$unwind":{"path":"$sourceData"}},
+    {"$group":{"_id":None,"uniqueValues":{"$addToSet":"$sourceData.scientific name"}}}
+]
 
-    # Check to see if the unique name string already exists in the datanbase; if not, go ahead and insert the new record and update the SGCN source with the ID for all relevant original names
-    if sgcnUniqueNamesCollection.find({"ScientificName_unique":thisRecord["ScientificName_unique"]}).count() == 0:
-        sgcnSpeciesCollection.update_many({"Scientific Name":thisRecord["ScientificName_original"]},{"$set":{"references":{"collection":"UniqueNames","_id":sgcnUniqueNamesCollection.insert_one(thisRecord).inserted_id}}})
-        print (thisRecord)
+uniqueNamesData = []
+for record in sgcnSourceCollection.aggregate(pipeline):
+    for uniqueName in record["uniqueValues"]:
+        d_uniqueName = {}
+        d_uniqueName["nameProcessingMetadata"] = {}
+        d_uniqueName["nameProcessingMetadata"]["processingAlgorithmName"] = "bis.cleanScientificName"
+        d_uniqueName["nameProcessingMetadata"]["processingAlgorithmURI"] = "https://github.com/usgs-bcb/bis/blob/master/bis/bis.py"
+        d_uniqueName["nameProcessingMetadata"]["creationDate"] = datetime.utcnow().isoformat()
+        d_uniqueName["nameProcessingMetadata"]["sourceCollection"] = "SGCN Source Data"
+        d_uniqueName["nameProcessingMetadata"]["sourcePipeline"] = str(pipeline)
+        d_uniqueName["ScientificName_original"] = uniqueName
+        d_uniqueName["ScientificName_clean"] = bis.cleanScientificName(uniqueName)
+        d_uniqueName["itis"] = {}
+        d_uniqueName["itis"]["registration"] = {}
+        d_uniqueName["itis"]["registration"]["url_ExactMatch"] = itis.getITISSearchURL(d_uniqueName["ScientificName_clean"],False,False)
+        d_uniqueName["itis"]["registration"]["url_FuzzyMatch"] = itis.getITISSearchURL(d_uniqueName["ScientificName_clean"],True,False)
+        d_uniqueName["worms"] = {}
+        d_uniqueName["worms"]["registration"] = {}
+        d_uniqueName["worms"]["registration"]["url_ExactMatch"] = worms.getWoRMSSearchURL("ExactName",d_uniqueName["ScientificName_clean"])
+        d_uniqueName["worms"]["registration"]["url_FuzzyMatch"] = worms.getWoRMSSearchURL("FuzzyName",d_uniqueName["ScientificName_clean"])
+        uniqueNamesData.append(d_uniqueName)
+
+sgcnTIRProcessCollection.insert_many(uniqueNamesData)
