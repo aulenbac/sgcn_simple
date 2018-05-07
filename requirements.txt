@@ -1,7 +1,0 @@
--e git+https://github.com/usgs-bcb/bis@916f35df357d3c577742350e35948918bf2fa091#egg=bis-origin/HEAD
--e git+https://<redacted>/BIS2_module.git@72e059b4d00f6224db3d8bf97dea38b691a91263#egg=bis2-origin/HEAD
-ipython==1.2.1
-pymongo==3.5.1
-pyparsing==2.0.1
-requests==2.2.1
-xmltodict==0.11.0
