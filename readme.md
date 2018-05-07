@@ -13,14 +13,15 @@ The system relies on items in a [ScienceBase colection](https://www.sciencebase.
 * Items need to be publicly available as the code does not authenticate
 
 ### Persistent data store
-All database interactions in the system run using pymongo. Initially, I built the code against a free MLab sandbox account for testing, and then I moved it to a MongoDB instance we just got set up on the ESIP Testbed. Database connections are handled through the secure bis2 package. Data are orgainzed into two logical collections.
+All database interactions in the system run using pymongo. Initially, I built the code against a free MLab sandbox account for testing, and then I moved it to a MongoDB instance we just got set up on the ESIP Testbed. Database connections are handled through the secure bis2 package. Data are orgainzed into three logical collections.
 
-* SGCN - Initially a simple dump of the attributes and values from the source repository with process metadata; augmented with a script that cleans up the scientific name string for processing
-* UniqueNames - Since the SGCN process all operates based on unique scientific names provided by the states, the first step is to pull out the unique names and give them a semipermanent identify for further processing. This collection creates an identifier for every unique name, essentially a document stub, and then everything else build data on that core. I initially wrote data from every discrete process into its own datastore, which has some architectural advantages, but then I experimented with building a single nested document for every unique name. The latter approach seemed to result in cleaner and simpler code to deal with, but we may refactor again in future.
+* SGCN Source Data - A dump of each submitted file transformed from text to JSON documents for processing
+* SGCN TIR Process - This starts with setup of each unique name slightly cleaned up for further processing and then is built with subdocuments containing the results of various processes
+* SGCN Synthesis - Final synthesis that is grouped on the settled unique scientific name for the species (or other taxonomic rank name) from authority matching and then built out for optimized use
 
 ### Custom Packages
 
-The code in this repo makes use of two custom and in-development packages for the Biogeographic Information System. The [bis](https://github.com/usgs-bcb/bis) is a public collection of modules and functions that exercise common algorithms used across these and other codes. The bis2 package is internal only as it contains connection string information and other sensitive details used in our work.
+The code in this repo makes use of two custom and in-development packages for the Biogeographic Information System. The [bis](https://github.com/usgs-bcb/bis) is a public collection of modules and functions that exercise common algorithms used across these and other codes. The bis2 package is internal only as it contains connection string information and other sensitive details used in our work (in the process of shifting this to a new method).
 
 ### Public/Open Source Packages
 
@@ -36,49 +37,33 @@ The major packages used in these codes include the following:
 Some aspects of the SGCN process need to occur in sequence while others can be initiated in parallel after certain dependencies in the data have been met. All codes were written to check for and act on available data based on a MongoDB query designed to look for something left to process, giving them a level of resilience in the face of data flow challenges (e.g., slow or flaky APIs). I numbered the Python scripts based on necessary or reasonable processing sequence.
 
 ### 1_ProcessSGCNRepositorySourceFiles.py
-Processes the source repository in ScienceBase to integrate all compliant items/files into the SGCN collection in the target MongoDB instance
+Processes the source repository in ScienceBase to integrate all compliant items/files into the SGCN collection in the target MongoDB instance within an SGCN Source Data collection
 
 ### 2_CleanUniqueScientificNames.py
 Builds the initial unique name documents and runs a function from the BIS package called cleanScientificName to generate the actual name string used throughout the process. This function makes a number of assumptions about what to do with the name strings that may need to be revisited over time. It gets rid of some conventions in naming species that may be specific to a region or discipline or a specific agency that we simply cannot fully understand at this time.
 
-### 3_SetupITISProcessing.py
-Sets up a "sub-document" called "itis" in the UniqueNames collection. It uses a convention of a registration object containing information that essentially registers the entity for further processing. It uses a function from the bis.itis module to set up the search URLs for further processing.
+### 3_ProcessITIS.py
+The latest version of this has pretty much all of its logic contained in the bis.itis module. It takes a scientific name string and runs through a series of queries against the ITIS Solr service to find matches. It now packages and returns all documents found in the process, following the taxonomic information to return a valid ITIS record if available but also including invalid records at the point of discover. This sets up the data for later decisionmaking. The function does strip out some less meaningful (at this point) information from the ITIS documents and reformats taxonomy for easier use.
 
-### 4_ProcessITIS.py
-This script runs the ITIS process based on the previously established point of registration. It uses the configuration from that object and runs through a series of logical steps to determine what ITIS documents to return and place within an itisData sub-document and uses a convention of recording processing details in a processingMetadata sub-document. This script makes use of a key function in the bis.itis module that handles packaging the JSON returned from the ITIS Solr service.
+### 4_ProcessWoRMS.py
+Similar to the ITIS process, this code now has all of the necessary logic built into the bis.worms module where we find one or more records via WoRMS REST services and bring back results for later processing.
 
-Note: This process will need to be refined for other use cases where we are getting information from ITIS, but much of the packaging logic should translate. There would be some benefit in looking at how the R-Taxize package and the Python port of that package handle the lookup process with ITIS and other authorities, although what we put together here is designed to operate in a completely unassisted way, recording what the algorithm finds in ITIS for further use downstream.
-
-### 5_SetupWoRMSProcessing.py
-Sets up a sub-document called WoRMS in the UniqueNames collection and uses a function from bis.worms to set up how the WoRMS processor should run to find taxon information from the World Register of Marine Species.
-
-### 6_ProcessWoRMS.py
-Processes the information from the worms.registration object in the UniqueSpecies collection to lookup the species, record processing details in a worms.processMetadata sub-document, and drop a slightly processed WoRMS record into worms.wormsData sub-document.
-
-### 7_SetupTESSProcessing.py
+### 5_SetupTESSProcessing.py
 Sets up a sub-ducument called TESS in the UniqueNames collection and uses a function from bis.tess to set up how the TESS processor should run to find and retrieve Federal listing status information from the USFWS Threatened and Endangered Species System. Because this script relies on ITIS information (and WoRMS if available), it should be run (or started at least) after the ITIS process. The query that drives the while loop here will look for UniqueNames documents that have ITIS data on board and will use WoRMS data as well if available.
 
-### 8_ProcessTESS.py
+### 6_ProcessTESS.py
 Processes the information from the tess.registration sub-document to lookup the species (based on either ITIS TSN or name), process the returned information using a function in the bis.tess module, record details in the tess.processingMetadata sub-document, and place data into the tess.tessData sub-document.
 
 Note: TESS is a fairly old web service based on XML XQuery. We should keep an eye on this service over time for updates or changes.
 
-### 9_SetupNatureServeProcessing.py
-Sets up a sub-document called NatureServe in the UniqueNames collection and consults any available names information (original "clean" name, ITIS, WoRMS) to set up a list of unique names for querying a NatureServe web service for an associated ID.
+### 7_SGCNDecisions.py
+At this stage, we can make a number of decisions about how to handle the ITIS, WoRMS, and TESS information we've connected to and brought back for further processing. This code contains the logic that put species on the SGCN National List when they have been successfully matched to ITIS or WoRMS and synthesizes the FWS listing information. It sets up the Scientific Name variable to be used by subsequent steps from this point.
 
-### 10_LookupNatureServeSpecies.py
-Processes the unique names teed up in the NatureServe.registration sub-document to look for the taxon and return a NatureServe Element Global ID for further processing. This process does not do anything fancy in terms of trying to match up with NatureServe, only running a crude lookup at this point that should return the best match available. We will need to look further into uses of the NatureServe information before we dig in and refine this process. The elementGlobalID is recorded in the NatureServe.processingMetadata sub-document generated as part of this process.
+### 8_ProcessNatureServe.py
+After working through difficulties with a number of previous steps, we found a new public service that can be used from NatureServe for discovering and returning basic information at a national scope for the US. This code is also now fully contained in the bis.natureserve module.
 
-### 11_ProcessNatureServe.py
-Processes the elementGlobalID using functions in the bis.natureserve and bis2.natureserve modules to retrieve and process selected information from the NatureServe species web services for further use. The main processing step here is to work through global, US regional, and US state (subnational) conservation status codes and build a more usable data structure with this information. The NatureServe web services are XML based, and this code uses the xmltodict package to process them into a more digestible dictionary. The script records the available upper level keys for reference, processes its own version of US conservation status, and caches the classification and full conservationStatus sub-documents for further evaluation as we determine the best uses of this information.
-
-### 12_SGCNSummarization.py
-This script contains the core logic for synthesizing the data retrieved from taxonomic authorities and other sources into a set of simple attributes within an "SGCN Summary" data structure that is added to the UniqueNames collection in the MongoDB store. The core attributes are based on version 1 of the SGCN process that was previously executed within a relational data framework and then piped into ElasticSearch for use in online applications. The algorithms in this script will need to be examined and improved over time as we determine improved logic for what the SGCN synthesis should be.
-
-### 13_BuildTextFilesForGC2.py
-This script works over the data from the final data from the UniqueNames collection, SGCN Summary sub-documents to build out simple CSV tables suitable for import into the GC2 infrastructure where we currently have live apps running. The text files are built to mimic the data structures we built in GC2 with SQL as views and then piped into ElasticSearch so that they could be backwards compatible for current apps. We will likely get more efficient use of ElasticSearch if we do this in a different way.
-
-The one thing that this process does not do at this time is pull the full data structures for ITIS, WoRMS, TESS, and NatureServe into GC2. I believe those are being access by the current SWAP web app in their somewhat bastardized form within GC2's ElasticSearch, so we will need to reexamine how that is being done. We will likely look into a way to take the full UniqueNames structure into ElasticSearch for more robust uses via some form of REST API, or we may put a REST interface on MongoDB itself.
+### 9_Synthesize.py
+This final step uses an aggregation pipeline to group the TIR processed records on unique Scientific Name (determined in 7_SGCNDecisions) and then builds out an optimized structure of additional information based on what we are doing with the SGCN process.
 
 ## Data Distribution
-Once these processing steps complete, everything needed to work with the SGCN data and our synthesis is contained in the SGCN and UniqueNames collections of whatever MongoDB instance the code is pointed at. I will be rounding out this new iteration of the process by initially distributing data into the GC2 instance of PostgreSQL piped to ElasticSearch so that the current web application for this information and other existing codes will continue to function with the same structures they are used to now. I will also be experimenting with building out ElasticSearch indexes directly from the MongoDB data as an alternative that will eliminate this particular use of the GC2 infrastructure that is still experimental but causing us fits in other areas.
+From this point, we are planning to build out an sgcn end point on the nascent bis API as the point of access for these data. That work will be updated here once available.

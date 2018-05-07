@@ -12,7 +12,7 @@ count = 0
 processRecord = {}
 while processRecord is not None:
     # Retrieve a record for processing - any record that does not yet have WoRMS data and has had a clean scientific name provided
-    processRecord = sgcnTIRProcessCollection.find_one({"$and":[{"worms":{"$exists":False}},{"ScientificName_clean":{"$exists":True}}]},{"ScientificName_clean":1})
+    processRecord = sgcnTIRProcessCollection.find_one({"$and":[{"ScientificName_clean":{"$exists":True}},{"worms":{"$exists":False}}]},{"ScientificName_clean":1})
 
     if processRecord is not None:
         

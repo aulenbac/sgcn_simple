@@ -28,14 +28,6 @@ for record in sgcnSourceCollection.aggregate(pipeline):
         d_uniqueName["nameProcessingMetadata"]["sourcePipeline"] = str(pipeline)
         d_uniqueName["ScientificName_original"] = uniqueName
         d_uniqueName["ScientificName_clean"] = bis.cleanScientificName(uniqueName)
-        d_uniqueName["itis"] = {}
-        d_uniqueName["itis"]["registration"] = {}
-        d_uniqueName["itis"]["registration"]["url_ExactMatch"] = itis.getITISSearchURL(d_uniqueName["ScientificName_clean"],False,False)
-        d_uniqueName["itis"]["registration"]["url_FuzzyMatch"] = itis.getITISSearchURL(d_uniqueName["ScientificName_clean"],True,False)
-        d_uniqueName["worms"] = {}
-        d_uniqueName["worms"]["registration"] = {}
-        d_uniqueName["worms"]["registration"]["url_ExactMatch"] = worms.getWoRMSSearchURL("ExactName",d_uniqueName["ScientificName_clean"])
-        d_uniqueName["worms"]["registration"]["url_FuzzyMatch"] = worms.getWoRMSSearchURL("FuzzyName",d_uniqueName["ScientificName_clean"])
         uniqueNamesData.append(d_uniqueName)
 
 sgcnTIRProcessCollection.insert_many(uniqueNamesData)
