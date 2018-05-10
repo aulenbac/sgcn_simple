@@ -14,6 +14,7 @@ _buildSynthesisCollection = False
 _buildStateTESSSynthesis = False
 _buildNatureServeSynthesis = True
 
+# This first aggregation step is not working through pymongo currently for some reason I can't pin down. I have had to run this through a console.
 if _buildSynthesisCollection:
 
     synthesisPipeline = [
@@ -22,6 +23,7 @@ if _buildSynthesisCollection:
             "_id":"$Scientific Name",
             "Common Name":{"$first":"$Common Name"},
             "Taxonomic Group":{"$first":"$Taxonomic Group"},
+            "Taxonomic Rank":{"$first":"$Taxonomic Rank"},
             "Match Method":{"$first":"$Match Method"},
             "Taxonomic Authority ID":{"$first":"$Taxonomic Authority ID"},
             "Taxonomy":{"$first":"$Taxonomy"},
@@ -53,8 +55,8 @@ if _buildStateTESSSynthesis:
             
             sgcnSynthesisCollection.update_one({"_id":synthRecord["_id"]},{"$set":updateInfo})
         
-        count = count + 1
-        print ("State/TESS", count)
+            count = count + 1
+            print ("State/TESS", count)
         
         
 if _buildNatureServeSynthesis:
@@ -67,5 +69,5 @@ if _buildNatureServeSynthesis:
         if synthRecord is not None:
             sgcnSynthesisCollection.update_one({"_id":synthRecord["_id"]},{"$set":sgcn.sgcn_natureserve_summary(sgcnTIRProcessCollection,synthRecord["_id"])})
         
-        count = count + 1
-        print ("NatureServe", count)
+            count = count + 1
+            print ("NatureServe", count)

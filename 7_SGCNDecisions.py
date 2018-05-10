@@ -6,6 +6,7 @@ from bis import itis
 from bis import sgcn
 
 _doManualMatch = True
+_checkSourceFiles = True
 
 sbSWAPItem = requests.get("https://www.sciencebase.gov/catalog/item/56d720ece4b015c306f442d5?format=json&fields=files").json()
 for file in sbSWAPItem["files"]:
@@ -38,13 +39,14 @@ if _doManualMatch:
         sgcnTIRProcessCollection.update_one({"ScientificName_original":re.compile(re.escape(manualMatch["ScientificName_original"]))},{"$set":{"itis":itisResult}})
         sgcnTIRProcessCollection.update_one({"ScientificName_original":re.compile(re.escape(manualMatch["ScientificName_original"]))},{"$unset":{"Scientific Name":1}})
 
+
+# Make sure the legacy source files are flagged in the SGCN Source Data collection before proceeding
+sgcn.set_legacy_sourcefile_flag(sgcnSource)
+
 count = 0
 sgcnDecoration = {}
 while sgcnDecoration is not None:
-    if count > 0:
-        break
-    
-    sgcnDecoration = sgcnTIRProcessCollection.find_one({"$and":[{"itis":{"$exists":True}},{"worms":{"$exists":True}}]})
+    sgcnDecoration = sgcnTIRProcessCollection.find_one({"$and":[{"Scientific Name":{"$exists":False}},{"itis":{"$exists":True}},{"worms":{"$exists":True}}]})
 
     if sgcnDecoration is not None:    
         sgcnDoc = {}
@@ -63,15 +65,14 @@ while sgcnDecoration is not None:
             sgcnDoc["Taxonomic Rank"] = acceptedITISDoc["rank"]
             sgcnDoc["Taxonomy"] = acceptedITISDoc["taxonomy"]
             
-        else:
-            if "worms" in sgcnDecoration.keys():
-                acceptedWoRMS = next((doc for doc in sgcnDecoration["worms"] if "status" in doc.keys() and doc["status"] == "accepted"),None)
-                if acceptedWoRMS is not None:
-                    sgcnDoc["Scientific Name"] = acceptedWoRMS["scientificname"]
-                    sgcnDoc["Taxonomic Authority ID"] = "http://www.marinespecies.org/rest/AphiaRecordByAphiaID/"+str(acceptedWoRMS["AphiaID"])
-                    sgcnDoc["Taxonomic Rank"] = acceptedWoRMS["rank"]
-                    sgcnDoc["Taxonomy"] = acceptedWoRMS["taxonomy"]
-                    sgcnDoc["Match Method"] = wormsMatchTypeMapping[acceptedWoRMS["match_type"]]
+        elif "worms" in sgcnDecoration.keys():
+            acceptedWoRMS = next((doc for doc in sgcnDecoration["worms"] if "status" in doc.keys() and doc["status"] == "accepted"),None)
+            if acceptedWoRMS is not None:
+                sgcnDoc["Scientific Name"] = acceptedWoRMS["scientificname"]
+                sgcnDoc["Taxonomic Authority ID"] = "http://www.marinespecies.org/rest/AphiaRecordByAphiaID/"+str(acceptedWoRMS["AphiaID"])
+                sgcnDoc["Taxonomic Rank"] = acceptedWoRMS["rank"]
+                sgcnDoc["Taxonomy"] = acceptedWoRMS["taxonomy"]
+                sgcnDoc["Match Method"] = wormsMatchTypeMapping[acceptedWoRMS["match_type"]]
 
         if "Scientific Name" not in sgcnDoc.keys():
             sgcnDoc["Scientific Name"] = sgcnDecoration["ScientificName_original"]
@@ -93,7 +94,6 @@ while sgcnDecoration is not None:
         if "Common Name" not in sgcnDoc.keys() and len(sgcnDoc["Source Data Summary"]) > 0:
             sgcnDoc["Common Name"] = sgcnDoc["Source Data Summary"]["Common Names"][0]
         
-        display (sgcnDoc)
-        #sgcnTIRProcessCollection.update_one({"_id":sgcnDecoration["_id"]},{"$set":sgcnDoc})
+        sgcnTIRProcessCollection.update_one({"_id":sgcnDecoration["_id"]},{"$set":sgcnDoc})
         count = count + 1
         print (count)
