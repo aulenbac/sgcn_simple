@@ -25,7 +25,9 @@ if _buildSynthesisCollection:
             "Taxonomic Group":{"$first":"$Taxonomic Group"},
             "Taxonomic Rank":{"$first":"$Taxonomic Rank"},
             "Match Method":{"$first":"$Match Method"},
+            "Taxonomic Authority Name":{"$first":"$Taxonomic Authority Name"},
             "Taxonomic Authority ID":{"$first":"$Taxonomic Authority ID"},
+            "Taxonomic Authority Web URL":{"$first":"$Taxonomic Authority Web URL"},
             "Taxonomy":{"$first":"$Taxonomy"},
             "Original Submitted Names":{"$addToSet":"$ScientificName_original"}
         }},

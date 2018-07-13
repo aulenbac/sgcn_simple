@@ -60,8 +60,9 @@ while sgcnDecoration is not None:
                     sgcnDoc["Common Name"] = cnItem["name"]
     
             sgcnDoc["Match Method"] = sgcnDecoration["itis"]["processingMetadata"]["Summary Result"]
-            
+            sgcnDoc["Taxonomic Authority Name"] = "ITIS"
             sgcnDoc["Taxonomic Authority ID"] = "https://services.itis.gov/?q=tsn:"+str(acceptedITISDoc["tsn"])
+            sgcnDoc["Taxonomic Authority Web URL"] = "https://www.itis.gov/servlet/SingleRpt/SingleRpt?search_topic=TSN&search_value="+str(acceptedITISDoc["tsn"])
             sgcnDoc["Taxonomic Rank"] = acceptedITISDoc["rank"]
             sgcnDoc["Taxonomy"] = acceptedITISDoc["taxonomy"]
             
@@ -69,7 +70,9 @@ while sgcnDecoration is not None:
             acceptedWoRMS = next((doc for doc in sgcnDecoration["worms"] if "status" in doc.keys() and doc["status"] == "accepted"),None)
             if acceptedWoRMS is not None:
                 sgcnDoc["Scientific Name"] = acceptedWoRMS["scientificname"]
+                sgcnDoc["Taxonomic Authority Name"] = "WoRMS"
                 sgcnDoc["Taxonomic Authority ID"] = "http://www.marinespecies.org/rest/AphiaRecordByAphiaID/"+str(acceptedWoRMS["AphiaID"])
+                sgcnDoc["Taxonomic Authority Web URL"] = "http://www.marinespecies.org/aphia.php?p=taxdetails&id="+str(acceptedWoRMS["AphiaID"])
                 sgcnDoc["Taxonomic Rank"] = acceptedWoRMS["rank"]
                 sgcnDoc["Taxonomy"] = acceptedWoRMS["taxonomy"]
                 sgcnDoc["Match Method"] = wormsMatchTypeMapping[acceptedWoRMS["match_type"]]
@@ -77,7 +80,9 @@ while sgcnDecoration is not None:
         if "Scientific Name" not in sgcnDoc.keys():
             sgcnDoc["Scientific Name"] = sgcnDecoration["ScientificName_original"]
             sgcnDoc["Match Method"] = "Not Matched"
+            sgcnDoc["Taxonomic Authority Name"] = None
             sgcnDoc["Taxonomic Authority ID"] = None
+            sgcnDoc["Taxonomic Authority Web URL"] = None
             sgcnDoc["Taxonomic Rank"] = "Undetermined"
             sgcnDoc["Taxonomy"] = None
             sgcnDoc["Taxonomic Group"] = "Other"
